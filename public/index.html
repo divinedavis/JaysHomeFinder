@@ -130,12 +130,13 @@ function scoreClass(s){return s>=11?'score-high':s>=10?'score-mid':'score-low';}
 function render(){
   document.getElementById('app').innerHTML=`
     <div class="header"><div><h1>HomeFinder NYC</h1><div class="subtitle">Road to $3M - Brooklyn Coffee Shop Building</div></div></div>
-    <div class="nav">
+    ${state.page!=='login'?`<div class="nav">
       <button class="${state.page==='dashboard'?'active':''}" onclick="navigate('dashboard')">Dashboard</button>
       <button class="${state.page==='portfolio'?'active':''}" onclick="navigate('portfolio')">Portfolio</button>
       <button class="${state.page==='calculator'?'active':''}" onclick="navigate('calculator')">Calculator</button>
       <button class="${state.page==='profile'?'active':''}" onclick="navigate('profile')">Profile</button>
-    </div>
+      <button onclick="doLogout()" style="margin-left:auto;border-color:var(--red);color:var(--red)">Logout</button>
+    </div>`:''}
     ${renderPage()}
     ${state.toast?'<div class="toast">'+state.toast+'</div>':''}`;
 }
@@ -150,11 +151,17 @@ function navigate(page){
 
 function renderPage(){
   switch(state.page){
+    case 'login':return renderLogin();
     case 'dashboard':return renderDashboard();
     case 'portfolio':return renderPortfolio();
     case 'calculator':return renderCalculator();
     case 'profile':return renderProfile();
+    default: return renderLogin();
   }
+}
+
+function renderLogin(){
+  return '<div style="display:flex;align-items:center;justify-content:center;min-height:60vh"><div class="search-panel" style="max-width:400px;width:100%;text-align:center"><h2 style="margin-bottom:24px;background:linear-gradient(135deg,var(--accent),var(--gold));-webkit-background-clip:text;-webkit-text-fill-color:transparent">Jay\'s Home Finder</h2><div style="margin-bottom:16px"><label>Password</label><input type="password" id="login-pw" placeholder="Enter password" onkeydown="if(event.key===\'Enter\')doLogin()"></div><button class="btn btn-primary" style="width:100%;padding:12px" onclick="doLogin()">Log In</button></div></div>';
 }
 
 function renderDashboard(){
@@ -322,8 +329,28 @@ function renderProfile(){
   </div></div>`;
 }
 
-document.addEventListener('DOMContentLoaded',()=>{render();loadDashboard();});
-if(document.readyState!=='loading'){render();loadDashboard();}
+async function checkAuth(){
+  const data = await api('GET','/api/auth/check');
+  if(data && data.authenticated){state.page='dashboard';loadDashboard();}
+  else{state.page='login';}
+  render();
+}
+async function doLogin(){
+  const pw = document.getElementById('login-pw')?.value;
+  if(!pw)return;
+  state.loading=true;render();
+  const data = await api('POST','/api/login',{password:pw});
+  state.loading=false;
+  if(data && data.success){state.page='dashboard';loadDashboard();render();}
+  else{showToast('Wrong password');render();}
+}
+async function doLogout(){
+  await api('POST','/api/logout');
+  state.page='login';render();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{render();checkAuth();});
+if(document.readyState!=='loading'){render();checkAuth();}
 </script>
 </body>
 </html>
