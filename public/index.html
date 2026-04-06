@@ -135,7 +135,7 @@ function render(){
       <button class="${state.page==='portfolio'?'active':''}" onclick="navigate('portfolio')">Portfolio</button>
       <button class="${state.page==='calculator'?'active':''}" onclick="navigate('calculator')">Calculator</button>
       <button class="${state.page==='profile'?'active':''}" onclick="navigate('profile')">Profile</button>
-      <button onclick="doLogout()" style="margin-left:auto;border-color:var(--red);color:var(--red)">Logout</button>
+      
     </div>`:''}
     ${renderPage()}
     ${state.toast?'<div class="toast">'+state.toast+'</div>':''}`;
@@ -151,12 +151,11 @@ function navigate(page){
 
 function renderPage(){
   switch(state.page){
-    case 'login':return renderLogin();
     case 'dashboard':return renderDashboard();
     case 'portfolio':return renderPortfolio();
     case 'calculator':return renderCalculator();
     case 'profile':return renderProfile();
-    default: return renderLogin();
+    default: return renderDashboard();
   }
 }
 
@@ -192,7 +191,6 @@ function renderDashboard(){
         <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (10/10)</option>
         <optgroup label="NYC">
           <option value="bronx" ${state.dashFilter==='bronx'?'selected':''}>Bronx</option>
-          <option value="queens" ${state.dashFilter==='queens'?'selected':''}>Queens</option>
         </optgroup>
         <optgroup label="Pennsylvania">
           <option value="philadelphia" ${state.dashFilter==='philadelphia'?'selected':''}>Philadelphia</option>
@@ -203,15 +201,11 @@ function renderDashboard(){
           <option value="trenton" ${state.dashFilter==='trenton'?'selected':''}>Trenton</option>
           <option value="irvington" ${state.dashFilter==='irvington'?'selected':''}>Irvington</option>
           <option value="east orange" ${state.dashFilter==='east orange'?'selected':''}>East Orange</option>
-          <option value="plainfield" ${state.dashFilter==='plainfield'?'selected':''}>Plainfield</option>
           <option value="paterson" ${state.dashFilter==='paterson'?'selected':''}>Paterson</option>
           <option value="passaic" ${state.dashFilter==='passaic'?'selected':''}>Passaic</option>
-          <option value="perth amboy" ${state.dashFilter==='perth amboy'?'selected':''}>Perth Amboy</option>
-          <option value="elizabeth" ${state.dashFilter==='elizabeth'?'selected':''}>Elizabeth</option>
-          <option value="bridgeton" ${state.dashFilter==='bridgeton'?'selected':''}>Bridgeton</option>
         </optgroup>
       </select>
-      <span style="color:var(--muted);font-size:13px">15 cities across NYC, NJ, PA | Multi-Family | Under $500k | 3+ Beds | No Distressed</span>
+      <span style="color:var(--muted);font-size:13px">10 cities across NYC, NJ, PA | Multi-Family | Under $500k | 3+ Beds | No Distressed</span>
     </div>
 
     ${displayProps.length?`
@@ -245,8 +239,12 @@ function renderPropertyCard(p){
   const addr=p.address||p.formattedAddress||'Unknown';
   const expanded=state.expandedProperty===(p.id||addr);
   const isPerfect=score===total;
+  const photo=p.photoUrl||p.streetViewUrl||'';
+  const valEst=p.valueEstimate||0;
+  const equity=valEst&&p.price?(valEst-p.price):0;
 
   return `<div class="property-card ${isPerfect?'qualified':''}">
+    ${photo?`<div style="margin:-20px -20px 16px -20px;border-radius:12px 12px 0 0;overflow:hidden;height:200px;background:var(--border)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" loading="lazy"></div>`:''}
     <div class="top">
       <div><div class="address">${addr}</div><div class="price">${fmt(p.price)}</div></div>
       <div class="score-ring ${scoreClass(score)}">${score}</div>
@@ -257,13 +255,13 @@ function renderPropertyCard(p){
       <span>${p.propertyType||''}</span><span>${p.yearBuilt||''}</span>
       ${p.daysOnMarket?'<span>'+p.daysOnMarket+'d on market</span>':''}
     </div>
-    ${p.rentEstimate?'<div style="color:var(--green);font-size:13px">Rent est: '+fmt(p.rentEstimate)+'/mo</div>':''}
-    ${p.valueEstimate?'<div style="color:var(--accent);font-size:13px">Value est: '+fmt(p.valueEstimate)+'</div>':''}
+    ${valEst?'<div style="display:flex;gap:16px;margin-top:4px"><span style="color:var(--accent);font-size:13px">Estimated value: '+fmt(valEst)+'</span>'+(equity>0?'<span style="color:var(--green);font-size:13px;font-weight:600">+'+fmt(equity)+' equity</span>':'')+'</div>':''}
+    ${p.priceReduced?'<div style="color:var(--gold);font-size:13px">Price reduced: '+fmt(p.priceReduced)+'</div>':''}
     ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 10 checks</div>':''}
     ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
     <div class="property-actions">
       <button class="btn btn-sm" onclick="state.expandedProperty=state.expandedProperty==${p.id}?null:${p.id};render()">${expanded?'Hide':'Show'} Checklist</button>
-      <button class="btn btn-sm btn-primary" onclick="rescoreProperty(${p.id})">Get Estimates</button>
+      ${p.listingUrl?'<a class="btn btn-sm btn-primary" href="'+p.listingUrl+'" target="_blank">View Listing</a>':''}
       <button class="btn btn-sm btn-green" onclick='addToPortfolio(${JSON.stringify({id:p.id,address:addr,price:p.price,rentEstimate:p.rentEstimate||0})})'>+ Portfolio</button>
     </div>
   </div>`;
@@ -349,8 +347,8 @@ async function doLogout(){
   state.page='login';render();
 }
 
-document.addEventListener('DOMContentLoaded',()=>{render();checkAuth();});
-if(document.readyState!=='loading'){render();checkAuth();}
+document.addEventListener('DOMContentLoaded',()=>{render();loadDashboard();});
+if(document.readyState!=='loading'){render();loadDashboard();}
 </script>
 </body>
 </html>

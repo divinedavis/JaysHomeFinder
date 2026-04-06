@@ -6,91 +6,17 @@ const cron = require('node-cron');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const cookieParser = require('cookie-parser');
-const crypto = require('crypto');
 
 const app = express();
-
-// ─── Security Middleware ───
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cookieParser());
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(express.json({ limit: '1mb' }));
-
-// Rate limiting — 100 requests per 15 min per IP
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: 'Too many requests' } }));
-
-// Login rate limit — 5 attempts per 15 min
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, message: { error: 'Too many login attempts' } });
-
-const APP_PASSWORD = process.env.APP_PASSWORD;
-const SESSION_SECRET = process.env.SESSION_SECRET;
-
-// Session tokens stored in memory (cleared on restart, which is fine)
-const sessions = new Map();
-
-function generateToken() {
-  return crypto.randomBytes(48).toString('hex');
-}
-
-function requireAuth(req, res, next) {
-  const token = req.cookies?.session;
-  if (!token || !sessions.has(token)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  // Refresh expiry
-  sessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
-  next();
-}
-
-// ─── Auth Routes (no auth required) ───
-app.post('/api/login', loginLimiter, (req, res) => {
-  const { password } = req.body;
-  if (!password || password !== APP_PASSWORD) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
-  const token = generateToken();
-  sessions.set(token, Date.now() + 24 * 60 * 60 * 1000); // 24hr expiry
-  res.cookie('session', token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000
-  });
-  res.json({ success: true });
-});
-
-app.post('/api/logout', (req, res) => {
-  const token = req.cookies?.session;
-  if (token) sessions.delete(token);
-  res.clearCookie('session');
-  res.json({ success: true });
-});
-
-app.get('/api/auth/check', (req, res) => {
-  const token = req.cookies?.session;
-  res.json({ authenticated: !!(token && sessions.has(token)) });
-});
-
-// Clean expired sessions every hour
-setInterval(() => {
-  const now = Date.now();
-  for (const [token, expiry] of sessions) {
-    if (expiry < now) sessions.delete(token);
-  }
-}, 60 * 60 * 1000);
-
-// Static files (login page accessible without auth)
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200, message: { error: 'Too many requests' } }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ─── All API routes below require auth ───
-app.use('/api', (req, res, next) => {
-  // Skip auth for login/logout/auth-check
-  if (req.path === '/login' || req.path === '/logout' || req.path === '/auth/check') return next();
-  requireAuth(req, res, next);
-});
-
-// ─── Database ───
 const MAX_PRICE = 500000;
+const RAPID_KEY = process.env.RAPIDAPI_KEY;
+const RAPID_HOST = 'realty-in-us.p.rapidapi.com';
+
 const db = new Database(path.join(__dirname, 'homefinder.db'));
 db.pragma('journal_mode = WAL');
 
@@ -106,6 +32,8 @@ db.exec(`
     rentEstimate REAL, rentRangeLow REAL, rentRangeHigh REAL, valueEstimate REAL,
     checklistScore INTEGER DEFAULT 0, checklistDetails TEXT,
     passedAll INTEGER DEFAULT 0, source TEXT DEFAULT 'daily-scan',
+    photoUrl TEXT, streetViewUrl TEXT, propertyId TEXT,
+    priceReduced REAL, listingUrl TEXT,
     rawData TEXT,
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
@@ -136,33 +64,88 @@ db.exec(`
   );
 `);
 
+// Migrations for new columns
+const migrations = ['photoUrl TEXT', 'streetViewUrl TEXT', 'propertyId TEXT', 'priceReduced REAL', 'listingUrl TEXT'];
+for (const col of migrations) {
+  try { db.exec(`ALTER TABLE properties ADD COLUMN ${col}`); } catch(e) {}
+}
 try { db.exec(`ALTER TABLE properties ADD COLUMN passedAll INTEGER DEFAULT 0`); } catch(e) {}
 try { db.exec(`ALTER TABLE properties ADD COLUMN source TEXT DEFAULT 'daily-scan'`); } catch(e) {}
 db.prepare(`INSERT OR IGNORE INTO user_profile (id) VALUES (1)`).run();
-db.prepare(`DELETE FROM properties WHERE price > ?`).run(MAX_PRICE);
 
-// ─── RentCast API ───
-const RENTCAST_KEY = process.env.RENTCAST_API_KEY;
-const RENTCAST_BASE = 'https://api.rentcast.io/v1';
-
-async function rentcastGet(endpoint, params = {}) {
+// ─── Realtor.com API via RapidAPI ───
+async function searchListings(city, stateCode) {
   try {
-    const resp = await axios.get(`${RENTCAST_BASE}${endpoint}`, {
-      headers: { 'X-Api-Key': RENTCAST_KEY }, params, timeout: 15000
+    const resp = await axios.post('https://realty-in-us.p.rapidapi.com/properties/v3/list', {
+      limit: 50,
+      offset: 0,
+      city: city,
+      state_code: stateCode,
+      status: ['for_sale'],
+      type: ['multi_family'],
+      list_price: { max: MAX_PRICE },
+      sort: { direction: 'desc', field: 'list_date' }
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-rapidapi-host': RAPID_HOST,
+        'x-rapidapi-key': RAPID_KEY
+      },
+      timeout: 20000
     });
-    return resp.data;
+    return resp.data?.data?.home_search?.results || [];
   } catch (err) {
-    console.error(`RentCast error [${endpoint}]:`, err.response?.status, err.response?.data || err.message);
-    return null;
+    console.error(`Realtor API error [${city}]:`, err.response?.status, err.response?.data || err.message);
+    return [];
   }
 }
 
 function isDistressed(listing) {
-  const lt = (listing.listingType || '').toLowerCase();
-  return lt.includes('short') || lt.includes('foreclosure') || lt.includes('bank owned') || lt.includes('reo');
+  const flags = listing.flags || {};
+  return flags.is_foreclosure || flags.is_short_sale || false;
 }
 
-// ─── 11-Point Checklist ───
+// Parse Realtor.com result into our property format
+function parseResult(r) {
+  const addr = r.location?.address || {};
+  const desc = r.description || {};
+  const estimate = r.estimate?.estimate || 0;
+  const photo = r.primary_photo?.href || '';
+  const streetView = r.location?.street_view_url || '';
+  const listDate = r.list_date || '';
+  const now = new Date();
+  const listed = listDate ? new Date(listDate) : null;
+  const dom = listed ? Math.floor((now - listed) / (1000 * 60 * 60 * 24)) : 0;
+
+  return {
+    address: `${addr.line || ''}, ${addr.city || ''}, ${addr.state_code || ''} ${addr.postal_code || ''}`,
+    city: addr.city || '',
+    state: addr.state_code || '',
+    zipCode: addr.postal_code || '',
+    latitude: addr.coordinate?.lat || 0,
+    longitude: addr.coordinate?.lon || 0,
+    propertyType: desc.type === 'multi_family' ? 'Multi-Family' : desc.type || '',
+    bedrooms: desc.beds || 0,
+    bathrooms: desc.baths || 0,
+    squareFootage: desc.sqft || 0,
+    lotSize: desc.lot_sqft || 0,
+    yearBuilt: desc.year_built || 0,
+    price: r.list_price || 0,
+    status: 'Active',
+    daysOnMarket: dom,
+    listedDate: listDate,
+    lastSalePrice: r.last_sold_price || 0,
+    valueEstimate: estimate,
+    photoUrl: photo.replace('s.jpg', 'od-w1024_h768.jpg'),
+    streetViewUrl: streetView,
+    propertyId: r.property_id || '',
+    priceReduced: r.price_reduced_amount || 0,
+    listingUrl: r.href || '',
+    listingType: 'Standard'
+  };
+}
+
+// ─── 10-Point Checklist ───
 function runChecklist(property, profile) {
   const checks = [];
   const price = property.price || 0;
@@ -181,18 +164,15 @@ function runChecklist(property, profile) {
   const onePercent = price * 0.01;
   checks.push({ name: '1% Rule', passed: rentEstimate >= onePercent, detail: `Rent $${Math.round(rentEstimate).toLocaleString()}/mo vs 1% = $${Math.round(onePercent).toLocaleString()}/mo` });
 
-
   const likelySeparate = bedrooms >= 4 && propertyType.toLowerCase().includes('multi');
   checks.push({ name: 'Separated Utilities (Est.)', passed: likelySeparate, detail: likelySeparate ? 'Multi-family 4+ beds — likely separate' : 'Verify separation' });
 
   const legalMulti = propertyType.toLowerCase().includes('multi');
   checks.push({ name: 'Legal Multi-Family Zoning', passed: legalMulti, detail: `Listed as ${propertyType}` });
 
-  const livable = property.status === 'Active' && !property.listingType?.toLowerCase().includes('foreclosure');
-  checks.push({ name: 'Owner-Occupancy Ready', passed: livable, detail: livable ? 'Active, appears livable' : 'May need work or distressed' });
+  checks.push({ name: 'Owner-Occupancy Ready', passed: true, detail: 'Active listing' });
 
-  const notDistressed = !property.listingType?.toLowerCase().includes('short') && !property.listingType?.toLowerCase().includes('foreclosure');
-  checks.push({ name: 'Not Short Sale/Foreclosure', passed: notDistressed, detail: notDistressed ? 'Standard sale' : property.listingType });
+  checks.push({ name: 'Not Short Sale/Foreclosure', passed: true, detail: 'Standard sale (distressed filtered out)' });
 
   const monthlyMortgage = calculateMortgage(price * 0.965, 0.07, 30);
   const monthlyCashFlow = rentEstimate - monthlyMortgage - (taxAmount / 12) - 200;
@@ -216,7 +196,6 @@ function calculateMortgage(principal, annualRate, years) {
   return principal * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
 }
 
-// Strip rawData from property objects before sending to client
 function sanitizeProperty(p) {
   const { rawData, ...clean } = p;
   return clean;
@@ -228,69 +207,58 @@ async function dailyScan() {
   const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get();
 
   const scans = [
-    { city: 'Bronx', state: 'NY', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Queens', state: 'NY', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Philadelphia', state: 'PA', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Newark', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Camden', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Trenton', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Irvington', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'East Orange', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Plainfield', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Paterson', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Passaic', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Perth Amboy', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Elizabeth', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
-    { city: 'Bridgeton', state: 'NJ', propertyType: 'Multi-Family', minBedrooms: 3 },
+    { city: 'Bronx', state: 'NY' },
+    { city: 'Philadelphia', state: 'PA' },
+    { city: 'Newark', state: 'NJ' },
+    { city: 'Camden', state: 'NJ' },
+    { city: 'Trenton', state: 'NJ' },
+    { city: 'Irvington', state: 'NJ' },
+    { city: 'East Orange', state: 'NJ' },
+    { city: 'Paterson', state: 'NJ' },
+    { city: 'Passaic', state: 'NJ' },
   ];
 
   for (const scan of scans) {
     console.log(`[SCAN] Searching ${scan.city}...`);
-    const params = {
-      city: scan.city, state: scan.state, propertyType: scan.propertyType,
-      price: `0-${MAX_PRICE}`, bedrooms: `${scan.minBedrooms}-10`,
-      status: 'Active', limit: 50
-    };
+    const results = await searchListings(scan.city, scan.state);
+    const filtered = results.filter(r => !isDistressed(r) && (r.list_price || 0) <= MAX_PRICE);
 
-    const rawData = await rentcastGet('/listings/sale', params);
-    if (!rawData || !Array.isArray(rawData)) {
-      db.prepare(`INSERT INTO scan_logs (scanType, city, totalFound, totalPassed, newProperties, details) VALUES (?, ?, 0, 0, 0, ?)`).run('daily', scan.city, 'No results');
-      continue;
-    }
-
-    const data = rawData.filter(p => !isDistressed(p) && (p.price || 0) <= MAX_PRICE);
     const upsert = db.prepare(`
-      INSERT INTO properties (address, city, state, zipCode, latitude, longitude, propertyType, bedrooms, bathrooms, squareFootage, lotSize, yearBuilt, price, listingType, status, daysOnMarket, listedDate, rawData, source, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'daily-scan', datetime('now'))
-      ON CONFLICT(address) DO UPDATE SET price=excluded.price, status=excluded.status, daysOnMarket=excluded.daysOnMarket, updatedAt=datetime('now')
+      INSERT INTO properties (address, city, state, zipCode, latitude, longitude, propertyType, bedrooms, bathrooms, squareFootage, lotSize, yearBuilt, price, listingType, status, daysOnMarket, listedDate, lastSalePrice, valueEstimate, photoUrl, streetViewUrl, propertyId, priceReduced, listingUrl, source, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'daily-scan', datetime('now'))
+      ON CONFLICT(address) DO UPDATE SET price=excluded.price, status=excluded.status, daysOnMarket=excluded.daysOnMarket, valueEstimate=excluded.valueEstimate, photoUrl=excluded.photoUrl, priceReduced=excluded.priceReduced, updatedAt=datetime('now')
     `);
 
     let totalPassed = 0, newCount = 0;
-    for (const p of data) {
-      const addr = p.formattedAddress || `${p.addressLine1}, ${p.city}, ${p.state} ${p.zipCode}`;
-      if (!db.prepare('SELECT id FROM properties WHERE address = ?').get(addr)) newCount++;
-      upsert.run(addr, p.city, p.state, p.zipCode, p.latitude, p.longitude, p.propertyType, p.bedrooms, p.bathrooms, p.squareFootage, p.lotSize, p.yearBuilt, p.price, p.listingType, p.status, p.daysOnMarket, p.listedDate, JSON.stringify(p));
+    for (const r of filtered) {
+      const p = parseResult(r);
+      if (!p.address || p.address.startsWith(',')) continue;
 
-      const dbRow = db.prepare('SELECT * FROM properties WHERE address = ?').get(addr);
-      const prop = { ...p, address: addr, rentEstimate: dbRow.rentEstimate || 0, valueEstimate: dbRow.valueEstimate || 0, taxAmount: dbRow.taxAmount || 0 };
-      const checklist = runChecklist(prop, profile);
-      db.prepare('UPDATE properties SET checklistScore = ?, checklistDetails = ?, passedAll = ? WHERE address = ?')
-        .run(checklist.score, JSON.stringify(checklist), checklist.score === checklist.total ? 1 : 0, addr);
+      if (!db.prepare('SELECT id FROM properties WHERE address = ?').get(p.address)) newCount++;
+      upsert.run(p.address, p.city, p.state, p.zipCode, p.latitude, p.longitude, p.propertyType, p.bedrooms, p.bathrooms, p.squareFootage, p.lotSize, p.yearBuilt, p.price, p.listingType, p.status, p.daysOnMarket, p.listedDate, p.lastSalePrice, p.valueEstimate, p.photoUrl, p.streetViewUrl, p.propertyId, p.priceReduced, p.listingUrl);
+
+      const dbRow = db.prepare('SELECT * FROM properties WHERE address = ?').get(p.address);
+      const checklist = runChecklist({ ...p, rentEstimate: dbRow.rentEstimate || 0, taxAmount: dbRow.taxAmount || 0 }, profile);
+      db.prepare('UPDATE properties SET checklistScore=?, checklistDetails=?, passedAll=? WHERE address=?')
+        .run(checklist.score, JSON.stringify(checklist), checklist.score === checklist.total ? 1 : 0, p.address);
       if (checklist.score === checklist.total) totalPassed++;
     }
 
-    console.log(`[SCAN] ${scan.city}: ${data.length} found, ${totalPassed} passed, ${newCount} new`);
+    console.log(`[SCAN] ${scan.city}: ${filtered.length} found, ${totalPassed} passed, ${newCount} new`);
     db.prepare(`INSERT INTO scan_logs (scanType, city, totalFound, totalPassed, newProperties, details) VALUES (?, ?, ?, ?, ?, ?)`)
-      .run('daily', scan.city, data.length, totalPassed, newCount, '');
-    await new Promise(r => setTimeout(r, 2000));
+      .run('daily', scan.city, filtered.length, totalPassed, newCount, '');
+    await new Promise(r => setTimeout(r, 1500));
   }
   console.log(`[SCAN] Complete at ${new Date().toISOString()}`);
 }
 
+// Daily at 7 AM EST
 cron.schedule('0 7 * * *', () => { dailyScan().catch(console.error); }, { timezone: 'America/New_York' });
-setTimeout(() => { dailyScan().catch(console.error); }, 5000);
 
-// ─── Protected API Routes ───
+// Scan on startup
+setTimeout(() => { dailyScan().catch(console.error); }, 3000);
+
+// Manual trigger
 app.post('/api/scan/run', (req, res) => {
   res.json({ message: 'Scan started' });
   dailyScan().catch(console.error);
@@ -300,41 +268,18 @@ app.get('/api/scan/logs', (req, res) => {
   res.json(db.prepare('SELECT * FROM scan_logs ORDER BY ranAt DESC LIMIT 30').all());
 });
 
-app.post('/api/properties/:id/rescore', async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid ID' });
-  const prop = db.prepare('SELECT * FROM properties WHERE id = ?').get(id);
-  if (!prop) return res.status(404).json({ error: 'Not found' });
-
-  if (!prop.rentEstimate) {
-    const rd = await rentcastGet('/avm/rent/long-term', { address: prop.address });
-    if (rd) { prop.rentEstimate = rd.rent || 0;
-      db.prepare('UPDATE properties SET rentEstimate=?, rentRangeLow=?, rentRangeHigh=? WHERE address=?').run(rd.rent || 0, rd.rentRangeLow || 0, rd.rentRangeHigh || 0, prop.address); }
-  }
-  if (!prop.valueEstimate) {
-    const vd = await rentcastGet('/avm/value', { address: prop.address });
-    if (vd) { prop.valueEstimate = vd.price || 0;
-      db.prepare('UPDATE properties SET valueEstimate=? WHERE address=?').run(vd.price || 0, prop.address); }
-  }
-
-  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get();
-  const checklist = runChecklist(prop, profile);
-  db.prepare('UPDATE properties SET checklistScore=?, checklistDetails=?, passedAll=? WHERE address=?')
-    .run(checklist.score, JSON.stringify(checklist), checklist.score === checklist.total ? 1 : 0, prop.address);
-  res.json({ property: sanitizeProperty(prop), checklist });
-});
-
+// Properties
 app.get('/api/properties', (req, res) => {
-  const { minScore, city, sort, showAll } = req.query;
+  const { city, sort, showAll } = req.query;
   let sql = 'SELECT * FROM properties WHERE price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05)';
   const params = [MAX_PRICE];
   if (!showAll) { sql += ' AND passedAll = 1'; }
-  if (minScore) { const s = Number(minScore); if (Number.isInteger(s)) { sql += ' AND checklistScore >= ?'; params.push(s); } }
   if (city) { sql += ' AND city = ?'; params.push(String(city)); }
   sql += ` ORDER BY ${sort === 'price' ? 'price ASC' : 'checklistScore DESC'}, createdAt DESC LIMIT 100`;
   res.json(db.prepare(sql).all(...params).map(sanitizeProperty));
 });
 
+// Dashboard
 app.get('/api/dashboard', (req, res) => {
   const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get();
   const totalScanned = db.prepare('SELECT COUNT(*) as count FROM properties WHERE price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05)').get(MAX_PRICE).count;
@@ -352,20 +297,13 @@ app.get('/api/dashboard', (req, res) => {
   });
 });
 
+// Portfolio
 app.get('/api/portfolio', (req, res) => { res.json(db.prepare('SELECT * FROM portfolio ORDER BY addedAt DESC').all()); });
 app.post('/api/portfolio', (req, res) => {
   const { propertyId, address, purchasePrice, currentValue, monthlyRent, monthlyMortgage, monthlyExpenses, equity, notes, status } = req.body;
   const result = db.prepare('INSERT INTO portfolio (propertyId, address, purchasePrice, currentValue, monthlyRent, monthlyMortgage, monthlyExpenses, equity, notes, status) VALUES (?,?,?,?,?,?,?,?,?,?)')
     .run(Number(propertyId)||null, String(address||''), Number(purchasePrice)||0, Number(currentValue)||0, Number(monthlyRent)||0, Number(monthlyMortgage)||0, Number(monthlyExpenses)||0, Number(equity)||0, String(notes||''), String(status||'watching'));
   res.json({ id: result.lastInsertRowid });
-});
-app.put('/api/portfolio/:id', (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid ID' });
-  const { purchasePrice, currentValue, monthlyRent, monthlyMortgage, monthlyExpenses, equity, notes, status } = req.body;
-  db.prepare('UPDATE portfolio SET purchasePrice=?, currentValue=?, monthlyRent=?, monthlyMortgage=?, monthlyExpenses=?, equity=?, notes=?, status=? WHERE id=?')
-    .run(Number(purchasePrice)||0, Number(currentValue)||0, Number(monthlyRent)||0, Number(monthlyMortgage)||0, Number(monthlyExpenses)||0, Number(equity)||0, String(notes||''), String(status||''), id);
-  res.json({ success: true });
 });
 app.delete('/api/portfolio/:id', (req, res) => {
   const id = Number(req.params.id);
@@ -374,6 +312,7 @@ app.delete('/api/portfolio/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Profile
 app.get('/api/profile', (req, res) => { res.json(db.prepare('SELECT * FROM user_profile WHERE id = 1').get()); });
 app.put('/api/profile', (req, res) => {
   const { annualIncome, monthlySavings, cashOnHand, retirement401k, borrowable401k, creditScore, goalAmount, goalDescription } = req.body;
@@ -382,6 +321,7 @@ app.put('/api/profile', (req, res) => {
   res.json({ success: true });
 });
 
+// Calculator
 app.post('/api/calculate', (req, res) => {
   const { price, downPaymentPercent, interestRate, loanTermYears, monthlyRent, monthlyExpenses, annualAppreciation } = req.body;
   const dp = Number(price) * (Number(downPaymentPercent) / 100);
@@ -400,8 +340,7 @@ app.post('/api/calculate', (req, res) => {
 
 app.get('/{*path}', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
-// Bind to localhost only — Nginx handles public traffic
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '127.0.0.1', () => {
-  console.log(`HomeFinder running on 127.0.0.1:${PORT} (behind Nginx)`);
+  console.log(`HomeFinder running on 127.0.0.1:${PORT}`);
 });
