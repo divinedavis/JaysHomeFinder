@@ -125,7 +125,7 @@ async function calculate(){state.calcResult=await api('POST','/api/calculate',st
 async function saveProfile(){await api('PUT','/api/profile',state.profile);showToast('Profile saved!');}
 
 function fmt(n){return n?'$'+Math.round(n).toLocaleString():'$0';}
-function scoreClass(s){return s>=11?'score-high':s>=10?'score-mid':'score-low';}
+function scoreClass(s){return s>=10?'score-high':s>=10?'score-mid':'score-low';}
 
 function render(){
   document.getElementById('app').innerHTML=`
@@ -189,7 +189,7 @@ function renderDashboard(){
     <div class="filter-bar">
       <select onchange="state.dashFilter=this.value;render()">
         <option value="all" ${state.dashFilter==='all'?'selected':''}>All Cities (by score)</option>
-        <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (11/11)</option>
+        <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (10/10)</option>
         <optgroup label="NYC">
           <option value="bronx" ${state.dashFilter==='bronx'?'selected':''}>Bronx</option>
           <option value="queens" ${state.dashFilter==='queens'?'selected':''}>Queens</option>
@@ -218,14 +218,14 @@ function renderDashboard(){
       <div class="property-grid">${displayProps.map(p=>renderPropertyCard(p)).join('')}</div>
     `:`
       <div class="empty">
-        <h3>${state.dashFilter==='qualified'?'No properties pass all 11 checks yet':'No properties found'}</h3>
+        <h3>${state.dashFilter==='qualified'?'No properties pass all 10 checks yet':'No properties found'}</h3>
         <p>${state.dashFilter==='qualified'?'Try rescoring high-scoring properties with "Get Estimates" to unlock checks #4, #5, and #13.':'Hit "Run Scan Now" to search Bronx & Queens.'}</p>
       </div>
     `}
 
     <div class="section" style="margin-top:30px">
       <div class="section-title">Scan History</div>
-      ${(d.recentLogs||[]).map(l=>`<div class="scan-log"><div><strong>${l.city}</strong> — ${l.totalFound} found, <span style="color:var(--green)">${l.totalPassed} passed 11/11</span>, ${l.newProperties} new</div><div class="time">${l.ranAt}</div></div>`).join('')}
+      ${(d.recentLogs||[]).map(l=>`<div class="scan-log"><div><strong>${l.city}</strong> — ${l.totalFound} found, <span style="color:var(--green)">${l.totalPassed} passed 10/10</span>, ${l.newProperties} new</div><div class="time">${l.ranAt}</div></div>`).join('')}
     </div>
 
     <div class="section">
@@ -241,7 +241,7 @@ function renderDashboard(){
 function renderPropertyCard(p){
   const checklist=p.checklist||(p.checklistDetails?JSON.parse(p.checklistDetails):null);
   const score=checklist?checklist.score:(p.checklistScore||0);
-  const total=checklist?checklist.total:11;
+  const total=checklist?checklist.total:10;
   const addr=p.address||p.formattedAddress||'Unknown';
   const expanded=state.expandedProperty===(p.id||addr);
   const isPerfect=score===total;
@@ -259,7 +259,7 @@ function renderPropertyCard(p){
     </div>
     ${p.rentEstimate?'<div style="color:var(--green);font-size:13px">Rent est: '+fmt(p.rentEstimate)+'/mo</div>':''}
     ${p.valueEstimate?'<div style="color:var(--accent);font-size:13px">Value est: '+fmt(p.valueEstimate)+'</div>':''}
-    ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 11 checks</div>':''}
+    ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 10 checks</div>':''}
     ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
     <div class="property-actions">
       <button class="btn btn-sm" onclick="state.expandedProperty=state.expandedProperty==${p.id}?null:${p.id};render()">${expanded?'Hide':'Show'} Checklist</button>

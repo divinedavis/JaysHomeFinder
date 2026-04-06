@@ -181,8 +181,6 @@ function runChecklist(property, profile) {
   const onePercent = price * 0.01;
   checks.push({ name: '1% Rule', passed: rentEstimate >= onePercent, detail: `Rent $${Math.round(rentEstimate).toLocaleString()}/mo vs 1% = $${Math.round(onePercent).toLocaleString()}/mo` });
 
-  const valueEst = property.valueEstimate || 0;
-  checks.push({ name: 'Forced Equity Potential', passed: valueEst > price * 1.05, detail: valueEst ? `Value $${Math.round(valueEst).toLocaleString()} vs price $${Math.round(price).toLocaleString()}` : 'No estimate yet' });
 
   const likelySeparate = bedrooms >= 4 && propertyType.toLowerCase().includes('multi');
   checks.push({ name: 'Separated Utilities (Est.)', passed: likelySeparate, detail: likelySeparate ? 'Multi-family 4+ beds — likely separate' : 'Verify separation' });
@@ -328,7 +326,7 @@ app.post('/api/properties/:id/rescore', async (req, res) => {
 
 app.get('/api/properties', (req, res) => {
   const { minScore, city, sort, showAll } = req.query;
-  let sql = 'SELECT * FROM properties WHERE price <= ?';
+  let sql = 'SELECT * FROM properties WHERE price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05)';
   const params = [MAX_PRICE];
   if (!showAll) { sql += ' AND passedAll = 1'; }
   if (minScore) { const s = Number(minScore); if (Number.isInteger(s)) { sql += ' AND checklistScore >= ?'; params.push(s); } }
@@ -339,11 +337,11 @@ app.get('/api/properties', (req, res) => {
 
 app.get('/api/dashboard', (req, res) => {
   const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get();
-  const totalScanned = db.prepare('SELECT COUNT(*) as count FROM properties WHERE price <= ?').get(MAX_PRICE).count;
+  const totalScanned = db.prepare('SELECT COUNT(*) as count FROM properties WHERE price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05)').get(MAX_PRICE).count;
   const totalPassed = db.prepare('SELECT COUNT(*) as count FROM properties WHERE passedAll = 1 AND price <= ?').get(MAX_PRICE).count;
   const avgScore = db.prepare('SELECT AVG(checklistScore) as avg FROM properties WHERE checklistScore > 0 AND price <= ?').get(MAX_PRICE).avg || 0;
-  const qualifiedProperties = db.prepare('SELECT * FROM properties WHERE passedAll = 1 AND price <= ? ORDER BY checklistScore DESC, price ASC').all(MAX_PRICE).map(sanitizeProperty);
-  const topScoring = db.prepare('SELECT * FROM properties WHERE price <= ? ORDER BY checklistScore DESC, price ASC LIMIT 50').all(MAX_PRICE).map(sanitizeProperty);
+  const qualifiedProperties = db.prepare('SELECT * FROM properties WHERE passedAll = 1 AND price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05) ORDER BY checklistScore DESC, price ASC').all(MAX_PRICE).map(sanitizeProperty);
+  const topScoring = db.prepare('SELECT * FROM properties WHERE price <= ? AND (valueEstimate IS NULL OR valueEstimate = 0 OR valueEstimate > price * 1.05) ORDER BY checklistScore DESC, price ASC LIMIT 50').all(MAX_PRICE).map(sanitizeProperty);
   const portfolio = db.prepare('SELECT * FROM portfolio').all();
   const lastScan = db.prepare('SELECT * FROM scan_logs ORDER BY ranAt DESC LIMIT 1').get();
   const recentLogs = db.prepare('SELECT * FROM scan_logs ORDER BY ranAt DESC LIMIT 10').all();
