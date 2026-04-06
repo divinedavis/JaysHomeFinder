@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jay's Home Finder</title>
-  <meta property="og:title" content="Jay's Home Finder">
-  <meta property="og:description" content="Road to $3M - Building a real estate portfolio for a Brooklyn coffee shop">
+  <title>Investment Home Finder</title>
+  <meta property="og:title" content="Investment Home Finder">
+  <meta property="og:description" content="">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://jayshomefinder.com">
   <meta property="og:image" content="https://jayshomefinder.com/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta name="description" content="Road to $3M - Building a real estate portfolio for a Brooklyn coffee shop">
+  <meta name="description" content="">
   <style>
     :root { --bg:#0a0a0f; --card:#12121a; --border:#1e1e2e; --text:#e0e0e0; --muted:#888; --accent:#6366f1; --accent2:#8b5cf6; --green:#22c55e; --red:#ef4444; --yellow:#eab308; --gold:#f59e0b; }
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -42,7 +42,7 @@
     .property-card .address { font-weight:600; font-size:15px; flex:1; }
     .property-card .price { font-size:20px; font-weight:700; color:var(--green); white-space:nowrap; margin-left:12px; }
     .property-card .meta { display:flex; gap:16px; color:var(--muted); font-size:13px; margin-bottom:12px; flex-wrap:wrap; }
-    .score-ring { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; flex-shrink:0; }
+    .score-ring { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0; }
     .score-high { background:rgba(34,197,94,0.15); color:var(--green); border:2px solid var(--green); }
     .score-mid { background:rgba(234,179,8,0.15); color:var(--yellow); border:2px solid var(--yellow); }
     .score-low { background:rgba(239,68,68,0.15); color:var(--red); border:2px solid var(--red); }
@@ -76,7 +76,7 @@
     .portfolio-card .info { flex:1; }
     .portfolio-card .numbers { display:flex; gap:24px; }
     .portfolio-card .number { text-align:right; }
-    .portfolio-card .number .val { font-size:18px; font-weight:600; }
+    .portfolio-card .number .val { font-size:15px; font-weight:600; }
     .portfolio-card .number .lbl { font-size:11px; color:var(--muted); text-transform:uppercase; }
     .profile-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:16px; }
     .scan-log { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
@@ -125,11 +125,11 @@ async function calculate(){state.calcResult=await api('POST','/api/calculate',st
 async function saveProfile(){await api('PUT','/api/profile',state.profile);showToast('Profile saved!');}
 
 function fmt(n){return n?'$'+Math.round(n).toLocaleString():'$0';}
-function scoreClass(s){return s>=10?'score-high':s>=10?'score-mid':'score-low';}
+function scoreClass(s){return 'score-high';}
 
 function render(){
   document.getElementById('app').innerHTML=`
-    <div class="header"><div><h1>HomeFinder NYC</h1><div class="subtitle">Road to $3M - Brooklyn Coffee Shop Building</div></div></div>
+    <div class="header"><div><h1>Investment Home Finder</h1><div class="subtitle"></div></div></div>
     ${state.page!=='login'?`<div class="nav">
       <button class="${state.page==='dashboard'?'active':''}" onclick="navigate('dashboard')">Dashboard</button>
       <button class="${state.page==='portfolio'?'active':''}" onclick="navigate('portfolio')">Portfolio</button>
@@ -175,8 +175,19 @@ function renderDashboard(){
   else if(state.dashFilter!=='all') displayProps = (d.topScoring||[]).filter(p=>p.city.toLowerCase()===state.dashFilter);
 
   return `
-    <div class="stats">
-      <div class="stat-card"><div class="label">Properties Scanned</div><div class="value">${d.stats.totalScanned}</div><div class="sub">under $500k, no distressed</div></div>
+    <div class="search-panel" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="section-title" style="margin:0">Search Criteria</div>
+        
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Cities</div><div style="font-size:14px;margin-top:4px">Bronx, Philadelphia, York, Lancaster, Newark, Camden, Trenton, Irvington, East Orange, Paterson, Passaic</div></div>
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Property Type</div><div style="font-size:14px;margin-top:4px">Multi-Family Only</div></div>
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Price Range</div><div style="font-size:14px;margin-top:4px">$50k — $500k</div></div>
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Excluded</div><div style="font-size:14px;margin-top:4px">Short Sales, Foreclosures, No Equity</div></div>
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Properties Found</div><div style="font-size:14px;margin-top:4px;color:var(--green)">${d.stats.totalScanned}</div></div>
+        <div><div style="color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px">Scan Schedule</div><div style="font-size:14px;margin-top:4px">Daily at 7 AM EST</div></div>
+      </div>
     </div>
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -188,12 +199,14 @@ function renderDashboard(){
     <div class="filter-bar">
       <select onchange="state.dashFilter=this.value;render()">
         <option value="all" ${state.dashFilter==='all'?'selected':''}>All Cities (by score)</option>
-        <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (10/10)</option>
+        <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (5/5)</option>
         <optgroup label="NYC">
           <option value="bronx" ${state.dashFilter==='bronx'?'selected':''}>Bronx</option>
         </optgroup>
         <optgroup label="Pennsylvania">
           <option value="philadelphia" ${state.dashFilter==='philadelphia'?'selected':''}>Philadelphia</option>
+          <option value="york" ${state.dashFilter==='york'?'selected':''}>York</option>
+          <option value="lancaster" ${state.dashFilter==='lancaster'?'selected':''}>Lancaster</option>
         </optgroup>
         <optgroup label="New Jersey">
           <option value="newark" ${state.dashFilter==='newark'?'selected':''}>Newark</option>
@@ -205,21 +218,21 @@ function renderDashboard(){
           <option value="passaic" ${state.dashFilter==='passaic'?'selected':''}>Passaic</option>
         </optgroup>
       </select>
-      <span style="color:var(--muted);font-size:13px">10 cities across NYC, NJ, PA | Multi-Family | Under $500k | 3+ Beds | No Distressed</span>
+      
     </div>
 
     ${displayProps.length?`
       <div class="property-grid">${displayProps.map(p=>renderPropertyCard(p)).join('')}</div>
     `:`
       <div class="empty">
-        <h3>${state.dashFilter==='qualified'?'No properties pass all 10 checks yet':'No properties found'}</h3>
+        <h3>${state.dashFilter==='qualified'?'No properties pass all 5 checks yet':'No properties found'}</h3>
         <p>${state.dashFilter==='qualified'?'Try rescoring high-scoring properties with "Get Estimates" to unlock checks #4, #5, and #13.':'Hit "Run Scan Now" to search Bronx & Queens.'}</p>
       </div>
     `}
 
     <div class="section" style="margin-top:30px">
       <div class="section-title">Scan History</div>
-      ${(d.recentLogs||[]).map(l=>`<div class="scan-log"><div><strong>${l.city}</strong> — ${l.totalFound} found, <span style="color:var(--green)">${l.totalPassed} passed 10/10</span>, ${l.newProperties} new</div><div class="time">${l.ranAt}</div></div>`).join('')}
+      ${(d.recentLogs||[]).map(l=>`<div class="scan-log"><div><strong>${l.city}</strong> — ${l.totalFound} found, <span style="color:var(--green)">${l.totalPassed} passed 5/5</span>, ${l.newProperties} new</div><div class="time">${l.ranAt}</div></div>`).join('')}
     </div>
 
     <div class="section">
@@ -235,29 +248,30 @@ function renderDashboard(){
 function renderPropertyCard(p){
   const checklist=p.checklist||(p.checklistDetails?JSON.parse(p.checklistDetails):null);
   const score=checklist?checklist.score:(p.checklistScore||0);
-  const total=checklist?checklist.total:10;
+  const total=checklist?checklist.total:5;
   const addr=p.address||p.formattedAddress||'Unknown';
   const expanded=state.expandedProperty===(p.id||addr);
   const isPerfect=score===total;
-  const photo=p.photoUrl||p.streetViewUrl||'';
+  const photo=p.photoUrl||p.streetViewUrl||'https://maps.googleapis.com/maps/api/streetview?size=640x480&location='+encodeURIComponent(addr)+'&source=outdoor&client=gme-movesalesinc';
   const valEst=p.valueEstimate||0;
   const equity=valEst&&p.price?(valEst-p.price):0;
 
   return `<div class="property-card ${isPerfect?'qualified':''}">
-    ${photo?`<div style="margin:-20px -20px 16px -20px;border-radius:12px 12px 0 0;overflow:hidden;height:200px;background:var(--border)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" loading="lazy"></div>`:''}
+    <div style="margin:-20px -20px 16px -20px;border-radius:12px 12px 0 0;overflow:hidden;height:200px;background:var(--border)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" loading="lazy"></div>
     <div class="top">
       <div><div class="address">${addr}</div><div class="price">${fmt(p.price)}</div></div>
-      <div class="score-ring ${scoreClass(score)}">${score}</div>
+      <div class="score-ring ${scoreClass(score)}">${score}/${total}</div>
     </div>
     <div class="meta">
       <span>${p.bedrooms||'?'} bed</span><span>${p.bathrooms||'?'} bath</span>
       <span>${p.squareFootage?p.squareFootage.toLocaleString()+' sqft':''}</span>
-      <span>${p.propertyType||''}</span><span>${p.yearBuilt||''}</span>
-      ${p.daysOnMarket?'<span>'+p.daysOnMarket+'d on market</span>':''}
+      <span>${p.propertyType||''}</span>${p.yearBuilt?'<span>Year Built: '+p.yearBuilt+'</span>':''}
+      ${p.daysOnMarket?'<span>'+p.daysOnMarket+' days on market</span>':''}
     </div>
     ${valEst?'<div style="display:flex;gap:16px;margin-top:4px"><span style="color:var(--accent);font-size:13px">Estimated value: '+fmt(valEst)+'</span>'+(equity>0?'<span style="color:var(--green);font-size:13px;font-weight:600">+'+fmt(equity)+' equity</span>':'')+'</div>':''}
+    ${p.price?'<div style="color:var(--muted);font-size:13px;margin-top:4px">20% down: <strong style="color:var(--text)">'+fmt(p.price*0.2)+'</strong></div>':''}
     ${p.priceReduced?'<div style="color:var(--gold);font-size:13px">Price reduced: '+fmt(p.priceReduced)+'</div>':''}
-    ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 10 checks</div>':''}
+    ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 5 checks</div>':''}
     ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
     <div class="property-actions">
       <button class="btn btn-sm" onclick="state.expandedProperty=state.expandedProperty==${p.id}?null:${p.id};render()">${expanded?'Hide':'Show'} Checklist</button>

@@ -135,6 +135,7 @@ function parseResult(r) {
     daysOnMarket: dom,
     listedDate: listDate,
     lastSalePrice: r.last_sold_price || 0,
+    lastSaleDate: r.last_sold_date || '',
     valueEstimate: estimate,
     photoUrl: photo.replace('s.jpg', 'od-w1024_h768.jpg'),
     streetViewUrl: streetView,
@@ -158,11 +159,7 @@ function runChecklist(property, profile) {
   const isFHA = propertyType.toLowerCase().includes('multi') && price <= 1149825;
   checks.push({ name: 'FHA 3.5% Eligible', passed: isFHA, detail: isFHA ? `3.5% down = $${Math.round(fhaDown).toLocaleString()}` : `Not FHA eligible (${propertyType})` });
 
-  const canCover = fhaDown <= profile.borrowable401k;
-  checks.push({ name: '401k Covers Down Payment', passed: canCover, detail: canCover ? `$${Math.round(fhaDown).toLocaleString()} <= $${profile.borrowable401k.toLocaleString()}` : `Need $${Math.round(fhaDown).toLocaleString()}, have $${profile.borrowable401k.toLocaleString()}` });
 
-  const onePercent = price * 0.01;
-  checks.push({ name: '1% Rule', passed: rentEstimate >= onePercent, detail: `Rent $${Math.round(rentEstimate).toLocaleString()}/mo vs 1% = $${Math.round(onePercent).toLocaleString()}/mo` });
 
   const likelySeparate = bedrooms >= 4 && propertyType.toLowerCase().includes('multi');
   checks.push({ name: 'Separated Utilities (Est.)', passed: likelySeparate, detail: likelySeparate ? 'Multi-family 4+ beds — likely separate' : 'Verify separation' });
@@ -172,15 +169,9 @@ function runChecklist(property, profile) {
 
   checks.push({ name: 'Owner-Occupancy Ready', passed: true, detail: 'Active listing' });
 
-  checks.push({ name: 'Not Short Sale/Foreclosure', passed: true, detail: 'Standard sale (distressed filtered out)' });
 
   const monthlyMortgage = calculateMortgage(price * 0.965, 0.07, 30);
-  const monthlyCashFlow = rentEstimate - monthlyMortgage - (taxAmount / 12) - 200;
-  checks.push({ name: 'Cash Flow Positive', passed: monthlyCashFlow > 0, detail: `$${Math.round(monthlyCashFlow).toLocaleString()}/mo (rent $${Math.round(rentEstimate).toLocaleString()} - mtg $${Math.round(monthlyMortgage).toLocaleString()} - tax $${Math.round(taxAmount/12).toLocaleString()} - ins $200)` });
 
-  const monthlyIncome = profile.annualIncome / 12;
-  const dti = (monthlyMortgage + (taxAmount / 12) + 200) / monthlyIncome;
-  checks.push({ name: 'DTI Under 43%', passed: dti < 0.43, detail: `${(dti * 100).toFixed(1)}%` });
 
   const estimatedUnits = bedrooms >= 6 ? 3 : bedrooms >= 4 ? 2 : 1;
   const pricePerUnit = price / estimatedUnits;
@@ -209,6 +200,8 @@ async function dailyScan() {
   const scans = [
     { city: 'Bronx', state: 'NY' },
     { city: 'Philadelphia', state: 'PA' },
+    { city: 'York', state: 'PA' },
+    { city: 'Lancaster', state: 'PA' },
     { city: 'Newark', state: 'NJ' },
     { city: 'Camden', state: 'NJ' },
     { city: 'Trenton', state: 'NJ' },
@@ -221,12 +214,13 @@ async function dailyScan() {
   for (const scan of scans) {
     console.log(`[SCAN] Searching ${scan.city}...`);
     const results = await searchListings(scan.city, scan.state);
-    const filtered = results.filter(r => !isDistressed(r) && (r.list_price || 0) <= MAX_PRICE);
+    const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString();
+    const filtered = results.filter(r => !isDistressed(r) && (r.list_price || 0) <= MAX_PRICE && (r.list_price || 0) >= 50000 && (!r.list_date || r.list_date >= twoYearsAgo));
 
     const upsert = db.prepare(`
-      INSERT INTO properties (address, city, state, zipCode, latitude, longitude, propertyType, bedrooms, bathrooms, squareFootage, lotSize, yearBuilt, price, listingType, status, daysOnMarket, listedDate, lastSalePrice, valueEstimate, photoUrl, streetViewUrl, propertyId, priceReduced, listingUrl, source, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'daily-scan', datetime('now'))
-      ON CONFLICT(address) DO UPDATE SET price=excluded.price, status=excluded.status, daysOnMarket=excluded.daysOnMarket, valueEstimate=excluded.valueEstimate, photoUrl=excluded.photoUrl, priceReduced=excluded.priceReduced, updatedAt=datetime('now')
+      INSERT INTO properties (address, city, state, zipCode, latitude, longitude, propertyType, bedrooms, bathrooms, squareFootage, lotSize, yearBuilt, price, listingType, status, daysOnMarket, listedDate, lastSalePrice, lastSaleDate, valueEstimate, photoUrl, streetViewUrl, propertyId, priceReduced, listingUrl, source, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'daily-scan', datetime('now'))
+      ON CONFLICT(address) DO UPDATE SET price=excluded.price, status=excluded.status, daysOnMarket=excluded.daysOnMarket, valueEstimate=excluded.valueEstimate, photoUrl=excluded.photoUrl, priceReduced=excluded.priceReduced, lastSalePrice=excluded.lastSalePrice, lastSaleDate=excluded.lastSaleDate, updatedAt=datetime('now')
     `);
 
     let totalPassed = 0, newCount = 0;
@@ -235,7 +229,7 @@ async function dailyScan() {
       if (!p.address || p.address.startsWith(',')) continue;
 
       if (!db.prepare('SELECT id FROM properties WHERE address = ?').get(p.address)) newCount++;
-      upsert.run(p.address, p.city, p.state, p.zipCode, p.latitude, p.longitude, p.propertyType, p.bedrooms, p.bathrooms, p.squareFootage, p.lotSize, p.yearBuilt, p.price, p.listingType, p.status, p.daysOnMarket, p.listedDate, p.lastSalePrice, p.valueEstimate, p.photoUrl, p.streetViewUrl, p.propertyId, p.priceReduced, p.listingUrl);
+      upsert.run(p.address, p.city, p.state, p.zipCode, p.latitude, p.longitude, p.propertyType, p.bedrooms, p.bathrooms, p.squareFootage, p.lotSize, p.yearBuilt, p.price, p.listingType, p.status, p.daysOnMarket, p.listedDate, p.lastSalePrice, p.lastSaleDate, p.valueEstimate, p.photoUrl, p.streetViewUrl, p.propertyId, p.priceReduced, p.listingUrl);
 
       const dbRow = db.prepare('SELECT * FROM properties WHERE address = ?').get(p.address);
       const checklist = runChecklist({ ...p, rentEstimate: dbRow.rentEstimate || 0, taxAmount: dbRow.taxAmount || 0 }, profile);
