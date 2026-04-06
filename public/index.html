@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jay's Home Finder</title>
+  <meta property="og:title" content="Jay's Home Finder">
+  <meta property="og:description" content="Road to $3M - Building a real estate portfolio for a Brooklyn coffee shop">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://jayshomefinder.com">
+  <meta property="og:image" content="https://jayshomefinder.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="description" content="Road to $3M - Building a real estate portfolio for a Brooklyn coffee shop">
+  <style>
+    :root { --bg:#0a0a0f; --card:#12121a; --border:#1e1e2e; --text:#e0e0e0; --muted:#888; --accent:#6366f1; --accent2:#8b5cf6; --green:#22c55e; --red:#ef4444; --yellow:#eab308; --gold:#f59e0b; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    .app { max-width:1400px; margin:0 auto; padding:20px; }
+    .header { display:flex; justify-content:space-between; align-items:center; padding:20px 0; border-bottom:1px solid var(--border); margin-bottom:30px; }
+    .header h1 { font-size:28px; background:linear-gradient(135deg,var(--accent),var(--gold)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .header .subtitle { color:var(--muted); font-size:14px; margin-top:4px; }
+    .nav { display:flex; gap:8px; margin-bottom:30px; flex-wrap:wrap; }
+    .nav button { padding:10px 20px; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px; cursor:pointer; font-size:14px; transition:all 0.2s; }
+    .nav button:hover,.nav button.active { background:var(--accent); border-color:var(--accent); color:white; }
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:30px; }
+    .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .stat-card .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+    .stat-card .value { font-size:28px; font-weight:700; margin-top:8px; }
+    .stat-card .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+    .progress-bar { width:100%; height:8px; background:var(--border); border-radius:4px; margin-top:12px; overflow:hidden; }
+    .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--gold)); border-radius:4px; transition:width 0.5s; }
+    .section { margin-bottom:30px; }
+    .section-title { font-size:20px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
+    .badge { background:var(--accent); color:white; font-size:12px; padding:2px 8px; border-radius:12px; }
+    .badge-green { background:var(--green); }
+    .property-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:16px; }
+    .property-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; transition:border-color 0.2s; }
+    .property-card:hover { border-color:var(--accent); }
+    .property-card.qualified { border-color:var(--green); border-width:2px; }
+    .property-card .top { display:flex; justify-content:space-between; align-items:start; margin-bottom:12px; }
+    .property-card .address { font-weight:600; font-size:15px; flex:1; }
+    .property-card .price { font-size:20px; font-weight:700; color:var(--green); white-space:nowrap; margin-left:12px; }
+    .property-card .meta { display:flex; gap:16px; color:var(--muted); font-size:13px; margin-bottom:12px; flex-wrap:wrap; }
+    .score-ring { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; flex-shrink:0; }
+    .score-high { background:rgba(34,197,94,0.15); color:var(--green); border:2px solid var(--green); }
+    .score-mid { background:rgba(234,179,8,0.15); color:var(--yellow); border:2px solid var(--yellow); }
+    .score-low { background:rgba(239,68,68,0.15); color:var(--red); border:2px solid var(--red); }
+    .checklist { margin-top:12px; }
+    .check-item { display:flex; align-items:center; gap:8px; font-size:13px; padding:4px 0; }
+    .check-item .icon { width:18px; text-align:center; }
+    .check-pass { color:var(--green); }
+    .check-fail { color:var(--red); }
+    .property-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+    .btn { padding:8px 16px; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:6px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+    .btn:hover { border-color:var(--accent); }
+    .btn-primary { background:var(--accent); border-color:var(--accent); color:white; }
+    .btn-primary:hover { background:var(--accent2); }
+    .btn-green { background:var(--green); border-color:var(--green); color:white; }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .btn-danger { border-color:var(--red); color:var(--red); }
+    .btn-danger:hover { background:var(--red); color:white; }
+    .calc-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+    .search-panel { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
+    label { display:block; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+    input,select { width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:14px; }
+    input:focus,select:focus { outline:none; border-color:var(--accent); }
+    .calc-result { background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.1)); border:1px solid var(--accent); border-radius:12px; padding:24px; }
+    .calc-result .row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); }
+    .calc-result .row:last-child { border:none; }
+    .projection-table { width:100%; border-collapse:collapse; margin-top:16px; }
+    .projection-table th,.projection-table td { padding:8px 12px; text-align:right; font-size:13px; border-bottom:1px solid var(--border); }
+    .projection-table th { color:var(--muted); text-transform:uppercase; font-size:11px; }
+    .projection-table td:first-child,.projection-table th:first-child { text-align:left; }
+    .portfolio-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+    .portfolio-card .info { flex:1; }
+    .portfolio-card .numbers { display:flex; gap:24px; }
+    .portfolio-card .number { text-align:right; }
+    .portfolio-card .number .val { font-size:18px; font-weight:600; }
+    .portfolio-card .number .lbl { font-size:11px; color:var(--muted); text-transform:uppercase; }
+    .profile-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:16px; }
+    .scan-log { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
+    .scan-log .time { color:var(--muted); }
+    .loading { text-align:center; padding:40px; color:var(--muted); }
+    .loading .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .empty { text-align:center; padding:60px 20px; color:var(--muted); }
+    .empty h3 { color:var(--text); margin-bottom:8px; }
+    .toast { position:fixed; bottom:20px; right:20px; background:var(--accent); color:white; padding:12px 24px; border-radius:8px; z-index:200; animation:slideIn 0.3s; }
+    @keyframes slideIn { from { transform:translateY(20px); opacity:0; } }
+    .filter-bar { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .filter-bar select { width:auto; min-width:140px; }
+    @media (max-width:768px) { .calc-grid{grid-template-columns:1fr;} .property-grid{grid-template-columns:1fr;} .stats{grid-template-columns:repeat(2,1fr);} .portfolio-card{flex-direction:column;gap:16px;} .portfolio-card .numbers{width:100%;justify-content:space-between;} }
+  </style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const API = '';
+let state = {
+  page:'dashboard', dashboard:null, portfolio:[], profile:null, loading:false, toast:null,
+  calcParams:{price:400000,downPaymentPercent:3.5,interestRate:7,loanTermYears:30,monthlyRent:3000,monthlyExpenses:300,annualAppreciation:3},
+  calcResult:null, expandedProperty:null, dashFilter:'all'
+};
+
+function showToast(msg){state.toast=msg;render();setTimeout(()=>{state.toast=null;render();},3000);}
+async function api(method,url,body){
+  try{const opts={method,headers:{'Content-Type':'application/json'}};if(body)opts.body=JSON.stringify(body);const res=await fetch(API+url,opts);if(!res.ok)throw new Error('HTTP '+res.status);return await res.json();}
+  catch(err){console.error('API error:',method,url,err);return null;}
+}
+
+async function loadDashboard(){state.loading=true;render();const data=await api('GET','/api/dashboard');if(data)state.dashboard=data;state.loading=false;render();}
+async function loadPortfolio(){state.portfolio=await api('GET','/api/portfolio')||[];render();}
+async function loadProfile(){state.profile=await api('GET','/api/profile');render();}
+
+async function rescoreProperty(id){showToast('Fetching rent & value estimates...');const data=await api('POST','/api/properties/'+id+'/rescore');if(data)showToast('Rescored: '+data.checklist.score+'/'+data.checklist.total);await loadDashboard();}
+async function runManualScan(){showToast('Scanning Bronx & Queens...');await api('POST','/api/scan/run');setTimeout(()=>{loadDashboard();showToast('Scan complete!');},18000);}
+
+async function addToPortfolio(prop){
+  await api('POST','/api/portfolio',{propertyId:prop.id,address:prop.address,purchasePrice:prop.price,currentValue:prop.price,monthlyRent:prop.rentEstimate||0,status:'watching'});
+  showToast('Added to portfolio!');await loadDashboard();
+}
+async function removeFromPortfolio(id){await api('DELETE','/api/portfolio/'+id);showToast('Removed');await loadPortfolio();}
+async function calculate(){state.calcResult=await api('POST','/api/calculate',state.calcParams);render();}
+async function saveProfile(){await api('PUT','/api/profile',state.profile);showToast('Profile saved!');}
+
+function fmt(n){return n?'$'+Math.round(n).toLocaleString():'$0';}
+function scoreClass(s){return s>=11?'score-high':s>=10?'score-mid':'score-low';}
+
+function render(){
+  document.getElementById('app').innerHTML=`
+    <div class="header"><div><h1>HomeFinder NYC</h1><div class="subtitle">Road to $3M - Brooklyn Coffee Shop Building</div></div></div>
+    <div class="nav">
+      <button class="${state.page==='dashboard'?'active':''}" onclick="navigate('dashboard')">Dashboard</button>
+      <button class="${state.page==='portfolio'?'active':''}" onclick="navigate('portfolio')">Portfolio</button>
+      <button class="${state.page==='calculator'?'active':''}" onclick="navigate('calculator')">Calculator</button>
+      <button class="${state.page==='profile'?'active':''}" onclick="navigate('profile')">Profile</button>
+    </div>
+    ${renderPage()}
+    ${state.toast?'<div class="toast">'+state.toast+'</div>':''}`;
+}
+
+function navigate(page){
+  state.page=page;
+  if(page==='dashboard')loadDashboard();
+  if(page==='portfolio')loadPortfolio();
+  if(page==='profile')loadProfile();
+  render();
+}
+
+function renderPage(){
+  switch(state.page){
+    case 'dashboard':return renderDashboard();
+    case 'portfolio':return renderPortfolio();
+    case 'calculator':return renderCalculator();
+    case 'profile':return renderProfile();
+  }
+}
+
+function renderDashboard(){
+  if(state.loading)return '<div class="loading"><div class="spinner"></div>Loading dashboard...</div>';
+  const d=state.dashboard;if(!d)return '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const ml=d.stats.monthsToGoal;const yl=ml===Infinity||ml===null?'N/A':Math.floor(ml/12)+'y '+ml%12+'m';
+  const ls=d.lastScan;
+
+  // Get properties to display based on filter
+  let displayProps = d.topScoring || [];
+  if(state.dashFilter==='qualified') displayProps = d.qualifiedProperties || [];
+  else if(state.dashFilter!=='all') displayProps = (d.topScoring||[]).filter(p=>p.city.toLowerCase()===state.dashFilter);
+
+  return `
+    <div class="stats">
+      <div class="stat-card"><div class="label">Properties Scanned</div><div class="value">${d.stats.totalScanned}</div><div class="sub">under $500k, no distressed</div></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" style="margin:0">Scanned Properties <span class="badge">${displayProps.length}</span></div>
+      <button class="btn btn-green" onclick="runManualScan()">Run Scan Now</button>
+    </div>
+    ${ls?`<div style="color:var(--muted);font-size:13px;margin-bottom:8px">Last scan: ${ls.ranAt} | Auto-scans daily at 7 AM EST</div>`:''}
+
+    <div class="filter-bar">
+      <select onchange="state.dashFilter=this.value;render()">
+        <option value="all" ${state.dashFilter==='all'?'selected':''}>All Cities (by score)</option>
+        <option value="qualified" ${state.dashFilter==='qualified'?'selected':''}>Qualified Only (11/11)</option>
+        <optgroup label="NYC">
+          <option value="bronx" ${state.dashFilter==='bronx'?'selected':''}>Bronx</option>
+          <option value="queens" ${state.dashFilter==='queens'?'selected':''}>Queens</option>
+        </optgroup>
+        <optgroup label="Pennsylvania">
+          <option value="philadelphia" ${state.dashFilter==='philadelphia'?'selected':''}>Philadelphia</option>
+        </optgroup>
+        <optgroup label="New Jersey">
+          <option value="newark" ${state.dashFilter==='newark'?'selected':''}>Newark</option>
+          <option value="camden" ${state.dashFilter==='camden'?'selected':''}>Camden</option>
+          <option value="trenton" ${state.dashFilter==='trenton'?'selected':''}>Trenton</option>
+          <option value="irvington" ${state.dashFilter==='irvington'?'selected':''}>Irvington</option>
+          <option value="east orange" ${state.dashFilter==='east orange'?'selected':''}>East Orange</option>
+          <option value="plainfield" ${state.dashFilter==='plainfield'?'selected':''}>Plainfield</option>
+          <option value="paterson" ${state.dashFilter==='paterson'?'selected':''}>Paterson</option>
+          <option value="passaic" ${state.dashFilter==='passaic'?'selected':''}>Passaic</option>
+          <option value="perth amboy" ${state.dashFilter==='perth amboy'?'selected':''}>Perth Amboy</option>
+          <option value="elizabeth" ${state.dashFilter==='elizabeth'?'selected':''}>Elizabeth</option>
+          <option value="bridgeton" ${state.dashFilter==='bridgeton'?'selected':''}>Bridgeton</option>
+        </optgroup>
+      </select>
+      <span style="color:var(--muted);font-size:13px">15 cities across NYC, NJ, PA | Multi-Family | Under $500k | 3+ Beds | No Distressed</span>
+    </div>
+
+    ${displayProps.length?`
+      <div class="property-grid">${displayProps.map(p=>renderPropertyCard(p)).join('')}</div>
+    `:`
+      <div class="empty">
+        <h3>${state.dashFilter==='qualified'?'No properties pass all 11 checks yet':'No properties found'}</h3>
+        <p>${state.dashFilter==='qualified'?'Try rescoring high-scoring properties with "Get Estimates" to unlock checks #4, #5, and #13.':'Hit "Run Scan Now" to search Bronx & Queens.'}</p>
+      </div>
+    `}
+
+    <div class="section" style="margin-top:30px">
+      <div class="section-title">Scan History</div>
+      ${(d.recentLogs||[]).map(l=>`<div class="scan-log"><div><strong>${l.city}</strong> — ${l.totalFound} found, <span style="color:var(--green)">${l.totalPassed} passed 11/11</span>, ${l.newProperties} new</div><div class="time">${l.ranAt}</div></div>`).join('')}
+    </div>
+
+    <div class="section">
+      <div class="section-title">The Roadmap</div>
+      <div class="property-grid">
+        <div class="property-card"><div style="font-size:24px;margin-bottom:8px">1</div><div class="address">House Hack in Bronx/Queens</div><div style="color:var(--muted);font-size:13px;margin-top:8px">Buy a 2-4 family with FHA 3.5% down under $500k. Live in one unit, rent the others.</div></div>
+        <div class="property-card"><div style="font-size:24px;margin-bottom:8px">2</div><div class="address">Build Equity (Years 1-3)</div><div style="color:var(--muted);font-size:13px;margin-top:8px">Stack $50-60k/year. Cash-out refi when property appreciates. Buy second property.</div></div>
+        <div class="property-card"><div style="font-size:24px;margin-bottom:8px">3</div><div class="address">1031 into Brooklyn</div><div style="color:var(--muted);font-size:13px;margin-top:8px">Sell portfolio tax-free. Roll into $3M mixed-use building with coffee shop.</div></div>
+      </div>
+    </div>`;
+}
+
+function renderPropertyCard(p){
+  const checklist=p.checklist||(p.checklistDetails?JSON.parse(p.checklistDetails):null);
+  const score=checklist?checklist.score:(p.checklistScore||0);
+  const total=checklist?checklist.total:11;
+  const addr=p.address||p.formattedAddress||'Unknown';
+  const expanded=state.expandedProperty===(p.id||addr);
+  const isPerfect=score===total;
+
+  return `<div class="property-card ${isPerfect?'qualified':''}">
+    <div class="top">
+      <div><div class="address">${addr}</div><div class="price">${fmt(p.price)}</div></div>
+      <div class="score-ring ${scoreClass(score)}">${score}</div>
+    </div>
+    <div class="meta">
+      <span>${p.bedrooms||'?'} bed</span><span>${p.bathrooms||'?'} bath</span>
+      <span>${p.squareFootage?p.squareFootage.toLocaleString()+' sqft':''}</span>
+      <span>${p.propertyType||''}</span><span>${p.yearBuilt||''}</span>
+      ${p.daysOnMarket?'<span>'+p.daysOnMarket+'d on market</span>':''}
+    </div>
+    ${p.rentEstimate?'<div style="color:var(--green);font-size:13px">Rent est: '+fmt(p.rentEstimate)+'/mo</div>':''}
+    ${p.valueEstimate?'<div style="color:var(--accent);font-size:13px">Value est: '+fmt(p.valueEstimate)+'</div>':''}
+    ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 11 checks</div>':''}
+    ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
+    <div class="property-actions">
+      <button class="btn btn-sm" onclick="state.expandedProperty=state.expandedProperty==${p.id}?null:${p.id};render()">${expanded?'Hide':'Show'} Checklist</button>
+      <button class="btn btn-sm btn-primary" onclick="rescoreProperty(${p.id})">Get Estimates</button>
+      <button class="btn btn-sm btn-green" onclick='addToPortfolio(${JSON.stringify({id:p.id,address:addr,price:p.price,rentEstimate:p.rentEstimate||0})})'>+ Portfolio</button>
+    </div>
+  </div>`;
+}
+
+function renderPortfolio(){
+  const tv=state.portfolio.reduce((s,p)=>s+(p.currentValue||0),0);
+  const te=state.portfolio.reduce((s,p)=>s+(p.equity||0),0);
+  const tc=state.portfolio.reduce((s,p)=>s+((p.monthlyRent||0)-(p.monthlyMortgage||0)-(p.monthlyExpenses||0)),0);
+  return `
+    <div class="stats">
+      <div class="stat-card"><div class="label">Portfolio Value</div><div class="value">${fmt(tv)}</div></div>
+      <div class="stat-card"><div class="label">Total Equity</div><div class="value">${fmt(te)}</div></div>
+      <div class="stat-card"><div class="label">Monthly Cash Flow</div><div class="value" style="color:${tc>=0?'var(--green)':'var(--red)'}">${fmt(tc)}</div></div>
+      <div class="stat-card"><div class="label">Properties</div><div class="value">${state.portfolio.length}</div></div>
+    </div>
+    <div class="section-title">Properties</div>
+    ${state.portfolio.length?state.portfolio.map(p=>`<div class="portfolio-card"><div class="info"><div style="font-weight:600">${p.address}</div><div style="color:var(--muted);font-size:13px;margin-top:4px">Status: ${p.status} ${p.notes?'| '+p.notes:''}</div></div><div class="numbers"><div class="number"><div class="val">${fmt(p.currentValue)}</div><div class="lbl">Value</div></div><div class="number"><div class="val">${fmt(p.monthlyRent)}</div><div class="lbl">Rent/mo</div></div><div class="number"><div class="val">${fmt(p.equity)}</div><div class="lbl">Equity</div></div><div><button class="btn btn-sm btn-danger" onclick="removeFromPortfolio(${p.id})">Remove</button></div></div></div>`).join(''):'<div class="empty"><h3>Portfolio empty</h3><p>Add properties from the dashboard</p></div>'}`;
+}
+
+function renderCalculator(){
+  const cp=state.calcParams;
+  return `<div class="calc-grid">
+    <div class="search-panel"><div class="section-title" style="margin-bottom:16px">Investment Calculator</div><div style="display:grid;gap:12px">
+      <div><label>Purchase Price</label><input type="number" value="${cp.price}" onchange="state.calcParams.price=Number(this.value)"></div>
+      <div><label>Down Payment %</label><input type="number" step="0.5" value="${cp.downPaymentPercent}" onchange="state.calcParams.downPaymentPercent=Number(this.value)"></div>
+      <div><label>Interest Rate %</label><input type="number" step="0.125" value="${cp.interestRate}" onchange="state.calcParams.interestRate=Number(this.value)"></div>
+      <div><label>Loan Term (years)</label><input type="number" value="${cp.loanTermYears}" onchange="state.calcParams.loanTermYears=Number(this.value)"></div>
+      <div><label>Monthly Rent Income</label><input type="number" value="${cp.monthlyRent}" onchange="state.calcParams.monthlyRent=Number(this.value)"></div>
+      <div><label>Monthly Expenses</label><input type="number" value="${cp.monthlyExpenses}" onchange="state.calcParams.monthlyExpenses=Number(this.value)"></div>
+      <div><label>Annual Appreciation %</label><input type="number" step="0.5" value="${cp.annualAppreciation}" onchange="state.calcParams.annualAppreciation=Number(this.value)"></div>
+      <button class="btn btn-primary" onclick="calculate()">Calculate</button>
+    </div></div>
+    <div>${state.calcResult?`<div class="calc-result"><h3 style="margin-bottom:16px">Results</h3>
+      <div class="row"><span>Down Payment</span><strong>${fmt(state.calcResult.downPayment)}</strong></div>
+      <div class="row"><span>Loan Amount</span><strong>${fmt(state.calcResult.loanAmount)}</strong></div>
+      <div class="row"><span>Monthly Mortgage</span><strong>${fmt(state.calcResult.monthlyMortgage)}</strong></div>
+      <div class="row"><span>Tax + Insurance</span><strong>${fmt(state.calcResult.monthlyTaxInsurance)}</strong></div>
+      <div class="row"><span>Total Monthly</span><strong>${fmt(state.calcResult.totalMonthly)}</strong></div>
+      <div class="row"><span>Monthly Cash Flow</span><strong style="color:${state.calcResult.cashFlow>=0?'var(--green)':'var(--red)'}">${fmt(state.calcResult.cashFlow)}</strong></div>
+      <div class="row"><span>Cash-on-Cash Return</span><strong>${state.calcResult.cashOnCash}%</strong></div>
+    </div><div style="margin-top:16px"><h3 style="margin-bottom:8px">10-Year Projection</h3><table class="projection-table"><thead><tr><th>Year</th><th>Value</th><th>Equity</th><th>Total Return</th></tr></thead><tbody>${state.calcResult.projection.map(y=>'<tr><td>Yr '+y.year+'</td><td>'+fmt(y.propertyValue)+'</td><td>'+fmt(y.equity)+'</td><td style="color:var(--green)">'+fmt(y.totalReturn)+'</td></tr>').join('')}</tbody></table></div>`:'<div class="empty"><h3>Run a calculation</h3></div>'}</div></div>`;
+}
+
+function renderProfile(){
+  if(!state.profile)return '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  const p=state.profile;
+  return `<div class="search-panel"><div class="section-title" style="margin-bottom:16px">Financial Profile</div><div class="profile-grid">
+    <div><label>Annual Income</label><input type="number" value="${p.annualIncome}" onchange="state.profile.annualIncome=Number(this.value)"></div>
+    <div><label>Monthly Savings</label><input type="number" value="${p.monthlySavings}" onchange="state.profile.monthlySavings=Number(this.value)"></div>
+    <div><label>Cash on Hand</label><input type="number" value="${p.cashOnHand}" onchange="state.profile.cashOnHand=Number(this.value)"></div>
+    <div><label>401k Balance</label><input type="number" value="${p.retirement401k}" onchange="state.profile.retirement401k=Number(this.value)"></div>
+    <div><label>Borrowable 401k</label><input type="number" value="${p.borrowable401k}" onchange="state.profile.borrowable401k=Number(this.value)"></div>
+    <div><label>Credit Score</label><input type="number" value="${p.creditScore}" onchange="state.profile.creditScore=Number(this.value)"></div>
+    <div><label>Goal Amount</label><input type="number" value="${p.goalAmount}" onchange="state.profile.goalAmount=Number(this.value)"></div>
+    <div><label>Goal</label><input type="text" value="${p.goalDescription}" onchange="state.profile.goalDescription=this.value"></div>
+  </div><button class="btn btn-primary" style="margin-top:16px" onclick="saveProfile()">Save Profile</button></div>
+  <div class="section" style="margin-top:24px"><div class="section-title">FHA Qualification</div><div class="stats">
+    <div class="stat-card"><div class="label">Max Purchase (FHA)</div><div class="value">${fmt(p.annualIncome/12*0.43/0.007*0.965)}</div><div class="sub">Based on 43% DTI</div></div>
+    <div class="stat-card"><div class="label">3.5% Down Needed</div><div class="value">${fmt(p.annualIncome/12*0.43/0.007*0.035)}</div></div>
+    <div class="stat-card"><div class="label">Available for Down</div><div class="value">${fmt(p.borrowable401k+p.cashOnHand)}</div><div class="sub">401k + cash</div></div>
+    <div class="stat-card"><div class="label">Monthly Budget</div><div class="value">${fmt(p.annualIncome/12*0.43)}</div><div class="sub">43% gross income</div></div>
+  </div></div>`;
+}
+
+document.addEventListener('DOMContentLoaded',()=>{render();loadDashboard();});
+if(document.readyState!=='loading'){render();loadDashboard();}
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+.env
+node_modules/
+homefinder.db
+*.db-wal
+*.db-shm
