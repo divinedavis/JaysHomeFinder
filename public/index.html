@@ -270,6 +270,7 @@ function renderPropertyCard(p){
     </div>
     ${valEst?'<div style="display:flex;gap:16px;margin-top:4px"><span style="color:var(--accent);font-size:13px">Estimated value: '+fmt(valEst)+'</span>'+(equity>0?'<span style="color:var(--green);font-size:13px;font-weight:600">+'+fmt(equity)+' equity</span>':'')+'</div>':''}
     ${p.price?'<div style="color:var(--muted);font-size:13px;margin-top:4px">20% down: <strong style="color:var(--text)">'+fmt(p.price*0.2)+'</strong></div>':''}
+    ${p.lastSalePrice?'<div style="color:var(--muted);font-size:13px;margin-top:4px">Last sold for: <strong style="color:var(--text)">'+fmt(p.lastSalePrice)+'</strong>'+(p.lastSaleDate?' in '+p.lastSaleDate.substring(0,4):'')+'</div>':''}
     ${p.priceReduced?'<div style="color:var(--gold);font-size:13px">Price reduced: '+fmt(p.priceReduced)+'</div>':''}
     ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 5 checks</div>':''}
     ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
