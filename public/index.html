@@ -245,6 +245,8 @@ function renderDashboard(){
     </div>`;
 }
 
+function calcMortgage(principal,rate,years){const r=rate/12;const n=years*12;return principal*(r*Math.pow(1+r,n))/(Math.pow(1+r,n)-1);}
+
 function renderPropertyCard(p){
   const checklist=p.checklist||(p.checklistDetails?JSON.parse(p.checklistDetails):null);
   const score=checklist?checklist.score:(p.checklistScore||0);
@@ -256,6 +258,21 @@ function renderPropertyCard(p){
   const valEst=p.valueEstimate||0;
   const equity=valEst&&p.price?(valEst-p.price):0;
 
+  // Investment metrics
+  const beds=p.bedrooms||0;
+  const price=p.price||0;
+  const estUnits=beds>=6?3:beds>=4?2:1;
+  const pricePerUnit=estUnits>0?Math.round(price/estUnits):0;
+  const fhaDown=Math.round(price*0.035);
+  const loanAmt=price-fhaDown;
+  const monthlyMtg=Math.round(calcMortgage(loanAmt,0.07,30));
+  const monthlyTax=Math.round(price*0.015/12);
+  const monthlyIns=125;
+  const totalMonthly=monthlyMtg+monthlyTax+monthlyIns;
+  const rentEst=p.rentEstimate||0;
+  const cashFlow=rentEst>0?rentEst-totalMonthly:null;
+  const grossYield=price>0&&rentEst>0?((rentEst*12/price)*100).toFixed(1):null;
+
   return `<div class="property-card ${isPerfect?'qualified':''}">
     <div style="margin:-20px -20px 16px -20px;border-radius:12px 12px 0 0;overflow:hidden;height:200px;background:var(--border)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'" loading="lazy"></div>
     <div class="top">
@@ -265,13 +282,20 @@ function renderPropertyCard(p){
     <div class="meta">
       <span>${p.bedrooms||'?'} bed</span><span>${p.bathrooms||'?'} bath</span>
       <span>${p.squareFootage?p.squareFootage.toLocaleString()+' sqft':''}</span>
-      <span>${p.propertyType||''}</span>${p.yearBuilt?'<span>Year Built: '+p.yearBuilt+'</span>':''}
+      <span>${p.propertyType||''}</span>${p.yearBuilt?'<span>Built '+p.yearBuilt+'</span>':''}
       ${p.daysOnMarket?'<span>'+p.daysOnMarket+' days on market</span>':''}
     </div>
-    ${valEst?'<div style="display:flex;gap:16px;margin-top:4px"><span style="color:var(--accent);font-size:13px">Estimated value: '+fmt(valEst)+'</span>'+(equity>0?'<span style="color:var(--green);font-size:13px;font-weight:600">+'+fmt(equity)+' equity</span>':'')+'</div>':''}
-    ${p.price?'<div style="color:var(--muted);font-size:13px;margin-top:4px">20% down: <strong style="color:var(--text)">'+fmt(p.price*0.2)+'</strong></div>':''}
-    ${p.lastSalePrice?'<div style="color:var(--muted);font-size:13px;margin-top:4px">Last sold for: <strong style="color:var(--text)">'+fmt(p.lastSalePrice)+'</strong>'+(p.lastSaleDate?' in '+p.lastSaleDate.substring(0,4):'')+'</div>':''}
-    ${p.priceReduced?'<div style="color:var(--gold);font-size:13px">Price reduced: '+fmt(p.priceReduced)+'</div>':''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-top:10px;padding:10px;background:rgba(99,102,241,0.06);border-radius:8px;font-size:13px">
+      <div style="color:var(--muted)">Est. Units <strong style="color:var(--text)">${estUnits}</strong></div>
+      <div style="color:var(--muted)">Price/Unit <strong style="color:${pricePerUnit<200000?'var(--green)':pricePerUnit<350000?'var(--yellow)':'var(--red)'}">${fmt(pricePerUnit)}</strong></div>
+      <div style="color:var(--muted)">FHA 3.5% Down <strong style="color:var(--text)">${fmt(fhaDown)}</strong></div>
+      <div style="color:var(--muted)">Est. Mortgage <strong style="color:var(--text)">${fmt(totalMonthly)}/mo</strong></div>
+      ${grossYield!==null?'<div style="color:var(--muted)">Gross Yield <strong style="color:'+(parseFloat(grossYield)>=12?'var(--green)':parseFloat(grossYield)>=8?'var(--yellow)':'var(--red)')+'">'+grossYield+'%</strong></div>':'<div style="color:var(--muted)">Gross Yield <strong style="color:var(--muted)">—</strong></div>'}
+      ${cashFlow!==null?'<div style="color:var(--muted)">Est. Cash Flow <strong style="color:'+(cashFlow>=0?'var(--green)':'var(--red)')+'">'+fmt(cashFlow)+'/mo</strong></div>':'<div style="color:var(--muted)">Est. Cash Flow <strong style="color:var(--muted)">—</strong></div>'}
+    </div>
+    ${valEst?'<div style="display:flex;gap:16px;margin-top:8px"><span style="color:var(--accent);font-size:13px">Estimated value: '+fmt(valEst)+'</span>'+(equity>0?'<span style="color:var(--green);font-size:13px;font-weight:600">+'+fmt(equity)+' equity</span>':'')+'</div>':''}
+    ${p.lastSalePrice?'<div style="color:var(--muted);font-size:13px;margin-top:4px">Last sold: <strong style="color:var(--text)">'+fmt(p.lastSalePrice)+'</strong>'+(p.lastSaleDate?' in '+p.lastSaleDate.substring(0,4):'')+'</div>':''}
+    ${p.priceReduced?'<div style="color:var(--gold);font-size:13px;margin-top:4px">Price reduced: '+fmt(p.priceReduced)+'</div>':''}
     ${isPerfect?'<div style="color:var(--green);font-size:14px;font-weight:600;margin-top:8px">QUALIFIED — Passes all 5 checks</div>':''}
     ${checklist&&expanded?'<div class="checklist">'+checklist.checks.map(c=>'<div class="check-item"><span class="icon '+(c.passed?'check-pass':'check-fail')+'">'+(c.passed?'&#10003;':'&#10007;')+'</span><span><strong>'+c.name+'</strong> — '+c.detail+'</span></div>').join('')+'</div>':''}
     <div class="property-actions">
